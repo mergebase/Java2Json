@@ -251,7 +251,7 @@ public class Java2Json {
                     if (c == 'u') {
                         c = p.json[p.pos++];
                         if (c == 'e') {
-                            return true;
+                            return Boolean.TRUE;
                         }
                     }
                 }
@@ -264,7 +264,7 @@ public class Java2Json {
                         if (c == 's') {
                             c = p.json[p.pos++];
                             if (c == 'e') {
-                                return false;
+                                return Boolean.FALSE;
                             }
                         }
                     }
@@ -305,7 +305,7 @@ public class Java2Json {
         }
 
         if ("0".equals(s)) {
-            return 0L;
+            return Long.valueOf(0L);
         }
 
         if (s.startsWith(".")) {
@@ -317,7 +317,7 @@ public class Java2Json {
             }
         }
 
-        if (s.contains(".e") || s.contains(".E")) {
+        if (contains(s, ".e") || contains(s, ".E")) {
             throw new RuntimeException("number literal invalid exponential: " + s);
         }
 
@@ -337,9 +337,9 @@ public class Java2Json {
                 throw new RuntimeException("invalid number literal - too many plusses/minuses: " + s);
             } else {
                 boolean isValidPlus = false;
-                boolean isValidMinus = minuses > 0 && (s.contains("e-") || s.contains("E-"));
+                boolean isValidMinus = minuses > 0 && (contains(s, "e-") || contains(s, "E-"));
                 if (!isValidMinus) {
-                    isValidPlus = plusses > 0 && (s.contains("e+") || s.contains("E+"));
+                    isValidPlus = plusses > 0 && (contains(s, "e+") || contains(s, "E+"));
                 }
                 if (!isValidPlus && !isValidMinus) {
                     throw new RuntimeException("invalid number literal: " + s);
@@ -489,6 +489,10 @@ public class Java2Json {
 
     private static boolean isWhitespace(char c) {
         return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+    }
+
+    private static boolean contains(String string, String thing) {
+        return string.indexOf(thing) >= 0;
     }
 
     private static StringBuffer prettyPrint(final Object obj, final int level, final StringBuffer buf) {
