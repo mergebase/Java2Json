@@ -1,5 +1,8 @@
 package com.mergebase;
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -9,6 +12,19 @@ import java.util.Map;
 
 public class Java2Json {
 
+    public static void main(String[] args) throws Exception {
+        FileInputStream fin = new FileInputStream(args[0]);
+        InputStreamReader isr = new InputStreamReader(fin, "UTF-8");
+        BufferedReader br = new BufferedReader(isr);
+        String line;
+        StringBuffer buf = new StringBuffer(1024);
+        while ((line = br.readLine()) != null) {
+            buf.append(line).append('\n');
+        }
+        Object o = parse(buf.toString());
+        System.out.println(format(o));
+    }
+
     private int pos;
     private char[] json;
 
@@ -17,6 +33,7 @@ public class Java2Json {
         this.json = json;
     }
 
+    private final static Long ZERO = Long.valueOf("0");
     private final static int MAP = 0;
     private final static int LIST = 1;
     private final static int STRING = 2;
@@ -305,7 +322,7 @@ public class Java2Json {
         }
 
         if ("0".equals(s)) {
-            return Long.valueOf(0L);
+            return ZERO;
         }
 
         if (s.startsWith(".")) {
