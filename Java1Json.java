@@ -1,3 +1,21 @@
+/*
+ *  Copyright (C) 2018, MergeBase Software Incorporated ("MergeBase")
+ *  of Coquitlam, BC, Canada - https://mergebase.com/
+ *  All rights reserved.
+ *
+ *  MergeBase licenses this file to You under the Apache License, Version 2.0
+ *  (the "License"); you may not use this file except in compliance with
+ *  the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
 package com.mergebase;
 
 import java.io.BufferedReader;
@@ -8,6 +26,14 @@ import java.util.Hashtable;
 import java.util.NoSuchElementException;
 import java.util.Vector;
 
+/**
+ * Java 1.1 compatible utility for converting back and forth between
+ * java objects (Hashtable, Vector, String, Number, Boolean, null) and JSON.
+ *
+ * Note: since Hashtable cannot store null values, we store a pre-constructed
+ * NoSuchElementException object in the map instead.  Ha ha.  Look for
+ * Java1Json.NULL_OBJ in results. Its getMessage() returns the String "null".
+ */
 public class Java1Json {
 
     public static void main(String[] args) throws Exception {
@@ -20,7 +46,7 @@ public class Java1Json {
             buf.append(line).append('\n');
         }
         Object o = parse(buf.toString());
-        System.out.println(format(o));
+        System.out.write(format(o).getBytes("UTF-8"));
     }
 
     private int pos;
@@ -47,12 +73,17 @@ public class Java1Json {
     /**
      * Converts a String of JSON into a Java representation,
      * parsing the result into a structure of nested
-     * Map, List, Boolean, String and null objects.
+     * Hashtable, Vector, Boolean, Long, Double, String and null objects.
+     *
+     * Note: since Hashtable cannot store null values, we store a pre-constructed
+     * NoSuchElementException object in the map instead.  Ha ha.  Look for
+     * Java1Json.NULL_OBJ in results. Its getMessage() returns the String "null".
      *
      * @param json String to parse
      * @return A Java representation of the parsed JSON String
-     * based on java.util.Map, java.util.List, java.lang.Boolean,
-     * java.lang.String and null.
+     * based on java.util.Hashtable, java.util.Vector, java.lang.Boolean,
+     * java.lang.Number, java.lang.String and null, as well as
+     * Java1Json.NULL_OBJ to denote null values in any returned Hashtables.
      */
     public static Object parse(String json) {
         char[] c = json.toCharArray();
@@ -78,11 +109,14 @@ public class Java1Json {
     /**
      * Formats a Java object into a JSON String.
      * <p>
-     * Expects the Java object to be a java.util.Map, java.util.Collection,
-     * java.lang.String, java.lang.Boolean, or null, or nested structure of
-     * the above.  All other object types are converted to java.lang.String
-     * using their toString() method and encoded as JSON string literals
-     * in the resulting representation.
+     * Expects the Java object to be a java.util.Hashtable, java.util.Vector,
+     * java.lang.String, java.lang.Number, java.lang.Boolean, or null, or
+     * nested structure of the above.
+     *
+     * Note: to store a "null" as a Hashtable value, please use
+     * Java1Json.NULL_OBJ.
+     *
+     * All other object types cause a RuntimeException to be thrown.
      *
      * @param o Java object to convert into a JSON String.
      * @return a valid JSON String
@@ -526,7 +560,6 @@ public class Java1Json {
             en = l.elements();
         }
 
-        boolean hasComma = false;
         while (en.hasMoreElements()) {
             Object o = en.nextElement();
             Object val = o;
@@ -540,7 +573,7 @@ public class Java1Json {
                 val = m.get(key);
             }
 
-            if (val == null || val instanceof Boolean || val instanceof Number) {
+            if (val == null || val == NULL_OBJ || val instanceof Boolean || val instanceof Number) {
                 jsonSafe(val, buf);
             } else if (val instanceof Vector) {
                 buf.append('[');
@@ -566,15 +599,13 @@ public class Java1Json {
                 buf.append('"');
                 jsonSafe(val, buf);
                 buf.append('"');
+            } else {
+                throw new RuntimeException("can only format Hashtable|Vector|String|Number|Boolean|null into JSON. Wrong type: " + o.getClass());
             }
-            buf.append(", ");
-            hasComma = true;
-        }
 
-        // Remove trailing comma.
-        if (hasComma) {
-            buf.deleteCharAt(buf.length() - 1);
-            buf.deleteCharAt(buf.length() - 1);
+            if (en.hasMoreElements()) {
+                buf.append(", ");
+            }
         }
         return buf;
     }
