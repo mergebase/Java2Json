@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2018, MergeBase Software Incorporated ("MergeBase")
+ *  Copyright (C) 2019, MergeBase Software Incorporated ("MergeBase")
  *  of Coquitlam, BC, Canada - https://mergebase.com/
  *  All rights reserved.
  *
@@ -16,21 +16,30 @@
  *  limitations under the License.
  *
  */
-package com.mergebase;
+
+package com.mergebase.util;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Java 1.2 compatible utility for converting back and forth between
  * java objects (Map, Collection, String, Number, Boolean, null) and JSON.
+ * <p>
+ * NOTE:  this version is Java 1.5 compatible.  To make it Java 1.2 compatible:
+ * <pre>
+ * sed -i 's/StringBuilder/StringBuffer/g' Java2Json.java
+ * sed -i 's/LinkedHashMap/HashMap/g'      Java2Json.java
+ * </pre>
  */
 public class Java2Json {
 
@@ -39,7 +48,7 @@ public class Java2Json {
         InputStreamReader isr = new InputStreamReader(fin, "UTF-8");
         BufferedReader br = new BufferedReader(isr);
         String line;
-        StringBuffer buf = new StringBuffer(1024);
+        StringBuilder buf = new StringBuilder(1024);
         while ((line = br.readLine()) != null) {
             buf.append(line).append('\n');
         }
@@ -66,6 +75,15 @@ public class Java2Json {
     private final static int MODE_NORMAL = 0;
     private final static int MODE_BACKSLASH = 1;
 
+    public static Map parseToMap(String json) {
+        return (Map) parse(json);
+    }
+
+    public static List parseToList(String json) {
+        return (List) parse(json);
+    }
+
+
     /**
      * Converts a String of JSON into a Java representation,
      * parsing the result into a structure of nested
@@ -77,6 +95,13 @@ public class Java2Json {
      * java.lang.Number, java.lang.String and null.
      */
     public static Object parse(String json) {
+        json = json != null ? json.trim() : "";
+
+        // Ignore BOM prefix if present.
+        if (json.length() > 0 && json.charAt(0) == 65279) {
+            json = json.substring(1).trim();
+        }
+
         char[] c = json.toCharArray();
         Java2Json p = new Java2Json(0, c);
 
@@ -97,6 +122,10 @@ public class Java2Json {
         }
     }
 
+    public static String format(Object o) {
+        return format(false, o);
+    }
+
     /**
      * Formats a Java object into a JSON String.
      * <p>
@@ -108,31 +137,23 @@ public class Java2Json {
      * @param o Java object to convert into a JSON String.
      * @return a valid JSON String
      */
-    public static String format(Object o) {
-        StringBuffer buf = new StringBuffer(1024);
-        prettyPrint(o, 0, buf);
+    public static String format(boolean pretty, Object o) {
+        StringBuilder buf = new StringBuilder(1024);
+        prettyPrint(pretty, o, 0, buf);
         String s = buf.toString();
         if (o instanceof Map) {
-            return "{" + s + "\n}\n";
-        } else if (o instanceof Collection) {
-            return "[" + s + "\n]\n";
+            return "{" + s + "}";
+        } else if (o instanceof Collection || o instanceof Object[]) {
+            return "[" + s + "]";
         } else {
             return s;
         }
     }
 
-    private static StringBuffer indent(int level) {
-        StringBuffer buf = new StringBuffer();
-        for (int i = 0; i < level; i++) {
-            buf.append("  ");
-        }
-        return buf;
-    }
-
     private static Object parseObject(int type, Java2Json p) {
         switch (type) {
             case MAP:
-                Map m = new HashMap();
+                Map m = new LinkedHashMap();
                 while (hasNextItem(p, '}')) {
                     String key = nextString(p);
                     nextChar(p, ':');
@@ -315,7 +336,7 @@ public class Java2Json {
     }
 
     private static Number nextNumber(Java2Json p) {
-        StringBuffer buf = new StringBuffer();
+        StringBuilder buf = new StringBuilder();
         for (int i = p.pos; i < p.json.length; i++) {
             p.pos++;
             char c = p.json[i];
@@ -433,7 +454,7 @@ public class Java2Json {
 
     private static String nextString(Java2Json p) {
         int mode = MODE_WHITESPACE;
-        StringBuffer buf = new StringBuffer();
+        StringBuilder buf = new StringBuilder();
         for (int i = p.pos; i < p.json.length; i++) {
             p.pos++;
             char c = p.json[i];
@@ -452,7 +473,7 @@ public class Java2Json {
                         return buf.toString();
                     } else {
                         if (Character.isISOControl(c)) {
-                            StringBuffer hex = new StringBuffer(Integer.toHexString(c));
+                            StringBuilder hex = new StringBuilder(Integer.toHexString(c));
                             if ("7f".equalsIgnoreCase(hex.toString())) {
                                 buf.append(c);
                             } else {
@@ -495,7 +516,7 @@ public class Java2Json {
                             buf.append('\\');
                             break;
                         case 'u':
-                            StringBuffer hex = new StringBuffer();
+                            StringBuilder hex = new StringBuilder();
                             for (int j = 0; j < 4; j++) {
                                 try {
                                     char hexChar = p.json[p.pos++];
@@ -533,8 +554,18 @@ public class Java2Json {
         return string.indexOf(thing) >= 0;
     }
 
-    private static StringBuffer prettyPrint(final Object obj, final int level, final StringBuffer buf) {
+    private static StringBuilder prettyPrint(
+            final boolean pretty, final Object objParam, final int level, final StringBuilder buf
+    ) {
         Iterator it;
+        final Object obj;
+        if (objParam instanceof Object[]) {
+            Object[] objs = (Object[]) objParam;
+            obj = Arrays.asList(objs);
+        } else {
+            obj = objParam;
+        }
+
         if (obj instanceof Map) {
             Map m = (Map) obj;
             it = m.entrySet().iterator();
@@ -548,14 +579,26 @@ public class Java2Json {
         while (it.hasNext()) {
             Object o = it.next();
             Object val = o;
-            buf.append('\n').append(indent(level));
+            if (val instanceof Object[]) {
+                Object[] objs = (Object[]) val;
+                val = Arrays.asList(objs);
+            }
+
+            if (pretty) {
+                buf.append('\n');
+                indent(buf, level);
+            }
             if (o instanceof Map.Entry) {
                 Map.Entry me = (Map.Entry) o;
                 String key = (String) me.getKey();
                 buf.append('"');
                 jsonSafe(key, buf);
-                buf.append('"').append(" : ");
+                buf.append('"').append(':');
                 val = me.getValue();
+                if (val instanceof Object[]) {
+                    Object[] objs = (Object[]) val;
+                    val = Arrays.asList(objs);
+                }
             }
 
             if (val == null || val instanceof Boolean || val instanceof Number) {
@@ -563,21 +606,25 @@ public class Java2Json {
             } else if (val instanceof Collection) {
                 buf.append('[');
                 int lenBefore = buf.length();
-                prettyPrint(val, level + 1, buf);
-                int lenAfter = buf.length();
-                if (lenBefore < lenAfter) {
-                    buf.append('\n');
-                    buf.append(indent(level));
+                prettyPrint(pretty, val, level + 1, buf);
+                if (pretty) {
+                    int lenAfter = buf.length();
+                    if (lenBefore < lenAfter) {
+                        buf.append('\n');
+                        indent(buf, level);
+                    }
                 }
                 buf.append(']');
             } else if (val instanceof Map) {
                 buf.append('{');
                 int lenBefore = buf.length();
-                prettyPrint(val, level + 1, buf);
-                int lenAfter = buf.length();
-                if (lenBefore < lenAfter) {
-                    buf.append('\n');
-                    buf.append(indent(level));
+                prettyPrint(pretty, val, level + 1, buf);
+                if (pretty) {
+                    int lenAfter = buf.length();
+                    if (lenBefore < lenAfter) {
+                        buf.append('\n');
+                        indent(buf, level);
+                    }
                 }
                 buf.append('}');
             } else if (val instanceof String) {
@@ -585,16 +632,28 @@ public class Java2Json {
                 jsonSafe(val, buf);
                 buf.append('"');
             } else {
-                throw new RuntimeException("can only format Map|Collection|String|Number|Boolean|null into JSON. Wrong type: " + o.getClass());
+
+                buf.append('"');
+                jsonSafe(val.toString(), buf);
+                buf.append('"');
+
+                // throw new RuntimeException("can only format Map|Collection|String|Number|Boolean|null into JSON. Wrong type: " + o.getClass());
             }
             if (it.hasNext()) {
-                buf.append(", ");
+                buf.append(',');
             }
         }
         return buf;
     }
 
-    private static void jsonSafe(Object o, StringBuffer buf) {
+    private static StringBuilder indent(StringBuilder buf, int level) {
+        for (int i = 0; i < level; i++) {
+            buf.append("  ");
+        }
+        return buf;
+    }
+
+    private static void jsonSafe(Object o, StringBuilder buf) {
         final String s;
         if (o == null) {
             buf.append("null");
