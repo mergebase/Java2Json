@@ -1,7 +1,6 @@
 /*
- *  Copyright (C) 2019, MergeBase Software Incorporated ("MergeBase")
+ *  Copyright (C) 2021, MergeBase Software Incorporated ("MergeBase")
  *  of Coquitlam, BC, Canada - https://mergebase.com/
- *  All rights reserved.
  *
  *  MergeBase licenses this file to You under the Apache License, Version 2.0
  *  (the "License"); you may not use this file except in compliance with
@@ -32,14 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Java 1.2 compatible utility for converting back and forth between
- * java objects (Map, Collection, String, Number, Boolean, null) and JSON.
- * <p>
- * NOTE:  this version is Java 1.5 compatible.  To make it Java 1.2 compatible:
- * <pre>
- * sed -i 's/StringBuilder/StringBuffer/g' Java2Json.java
- * sed -i 's/LinkedHashMap/HashMap/g'      Java2Json.java
- * </pre>
+ * Utility for converting back and forth between Java objects (Map, Collection, String, Number, Boolean, null) and JSON.
  */
 public class Java2Json {
 
@@ -75,14 +67,34 @@ public class Java2Json {
     private final static int MODE_NORMAL = 0;
     private final static int MODE_BACKSLASH = 1;
 
+    public static String makePretty(String ugly) {
+        Object juliusJson = parse(ugly);
+        return format(true, juliusJson);
+    }
+
     public static Map parseToMap(String json) {
-        return (Map) parse(json);
+        if (json == null) {
+            return null;
+        }
+        json = json.trim();
+        if ("".equals(json)) {
+            return new LinkedHashMap();
+        } else {
+            return (Map) parse(json);
+        }
     }
 
     public static List parseToList(String json) {
-        return (List) parse(json);
+        if (json == null) {
+            return null;
+        }
+        json = json.trim();
+        if ("".equals(json)) {
+            return new ArrayList();
+        } else {
+            return (List) parse(json);
+        }
     }
-
 
     /**
      * Converts a String of JSON into a Java representation,
@@ -95,13 +107,6 @@ public class Java2Json {
      * java.lang.Number, java.lang.String and null.
      */
     public static Object parse(String json) {
-        json = json != null ? json.trim() : "";
-
-        // Ignore BOM prefix if present.
-        if (json.length() > 0 && json.charAt(0) == 65279) {
-            json = json.substring(1).trim();
-        }
-
         char[] c = json.toCharArray();
         Java2Json p = new Java2Json(0, c);
 
@@ -590,7 +595,13 @@ public class Java2Json {
             }
             if (o instanceof Map.Entry) {
                 Map.Entry me = (Map.Entry) o;
-                String key = (String) me.getKey();
+                Object keyObj = me.getKey();
+                String key;
+                if (keyObj instanceof String) {
+                    key = (String) keyObj;
+                } else {
+                    key = String.valueOf(keyObj);
+                }
                 buf.append('"');
                 jsonSafe(key, buf);
                 buf.append('"').append(':');
@@ -627,17 +638,10 @@ public class Java2Json {
                     }
                 }
                 buf.append('}');
-            } else if (val instanceof String) {
+            } else {
                 buf.append('"');
                 jsonSafe(val, buf);
                 buf.append('"');
-            } else {
-
-                buf.append('"');
-                jsonSafe(val.toString(), buf);
-                buf.append('"');
-
-                // throw new RuntimeException("can only format Map|Collection|String|Number|Boolean|null into JSON. Wrong type: " + o.getClass());
             }
             if (it.hasNext()) {
                 buf.append(',');
@@ -672,7 +676,7 @@ public class Java2Json {
         } else if (o instanceof String) {
             s = (String) o;
         } else {
-            s = o.toString();
+            s = String.valueOf(o);
         }
 
         for (int i = 0; i < s.length(); i++) {
@@ -692,9 +696,6 @@ public class Java2Json {
                     break;
                 case '\t':
                     buf.append("\\t");
-                    break;
-                case '/':
-                    buf.append("\\/");
                     break;
                 case '\\':
                     buf.append("\\\\");
